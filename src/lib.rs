@@ -1,9 +1,19 @@
-use bitflags::bitflags;
+#![feature(impl_trait_in_bindings)]
 
-pub(crate) mod internal;
+mod interfaces;
+pub(crate) use interfaces::*;
 
-mod instance;
-pub use instance::*;
+mod descriptors;
+pub use descriptors::*;
+
+mod enums;
+pub use enums::*;
+
+mod errors;
+pub use errors::*;
+
+mod vulkan;
+pub use vulkan::*;
 
 #[inline]
 const fn version_packed(major: u8, minor: u8, patch: u8) -> u32 {
@@ -110,19 +120,13 @@ impl From<Version> for [u8; 3] {
 
 pub const API_VERSION: Version = Version::new(0, 1, 0);
 
-bitflags! {
-    #[derive(PartialEq, Clone, Copy)]
-    pub struct Backend: u8 {
-        const VULKAN = 1 << 0;
-        const METAL = 1 << 1;
-    }
+pub trait IgnisHasWindowHandle:
+    raw_window_handle::HasWindowHandle + core::fmt::Debug + Send + Sync + 'static
+{
 }
-
-bitflags! {
-    #[derive(PartialEq, Clone, Copy)]
-    pub struct InstanceFeatures: u8 {
-        const DEBUG = 1 << 0;
-    }
+impl<T: raw_window_handle::HasWindowHandle + core::fmt::Debug + Send + Sync + 'static>
+    IgnisHasWindowHandle for T
+{
 }
 
 #[cfg(test)]
@@ -143,7 +147,6 @@ mod tests {
         };
 
         let descriptor = InstanceDescriptor {
-            backends: Backend::VULKAN,
             application: application_descriptor,
             features: InstanceFeatures::DEBUG,
             window: None,
@@ -151,7 +154,13 @@ mod tests {
 
         let instance = Instance::new(&descriptor)?;
 
-        println!("Backend: {}", instance.get_backend_str());
+        let backend_info = instance.get_backend_info();
+        println!("Backend: {}", backend_info.name);
+
+        let adapter = instance.request_adapter()?;
+
+        let adapter_info = instance.get_adapter_info(&adapter);
+        println!("Adapter: {}", adapter_info.device_name);
 
         instance.destroy();
 
